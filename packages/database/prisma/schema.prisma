@@ -1,0 +1,273 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../generated/prisma"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String                  @id
+  name                   String
+  email                  String
+  emailVerified          Boolean
+  image                  String?
+  createdAt              DateTime
+  updatedAt              DateTime
+  stripeCustomerId       String?
+  role                   String?
+  banned                 Boolean?
+  banReason              String?
+  banExpires             DateTime?
+  onboarding             Boolean                 @default(false)
+  unsubscribed           Boolean                 @default(false)
+  metadata               Json?
+  sessions               Session[]
+  accounts               Account[]
+  apikeys                Apikey[]
+  tags                   Tag[]
+  bookmarks              Bookmark[]
+  bookmarkOpens          BookmarkOpen[]
+  subscriptions          Subscription[]
+  bookmarkProcessingRuns BookmarkProcessingRun[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String
+  createdAt      DateTime
+  updatedAt      DateTime
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+model Apikey {
+  id                  String    @id
+  name                String?
+  start               String?
+  prefix              String?
+  key                 String
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refillInterval      Int?
+  refillAmount        Int?
+  lastRefillAt        DateTime?
+  enabled             Boolean?
+  rateLimitEnabled    Boolean?
+  rateLimitTimeWindow Int?
+  rateLimitMax        Int?
+  requestCount        Int?
+  remaining           Int?
+  lastRequest         DateTime?
+  expiresAt           DateTime?
+  createdAt           DateTime
+  updatedAt           DateTime
+  permissions         String?
+  metadata            String?
+
+  @@map("apikey")
+}
+
+enum TagType {
+  USER
+  IA
+}
+
+model Tag {
+  id     String  @id @default(cuid())
+  name   String
+  userId String
+  user   User    @relation(fields: [userId], references: [id])
+  type   TagType @default(IA)
+
+  bookmarks BookmarkTag[]
+
+  @@unique([userId, name])
+}
+
+model BookmarkTag {
+  bookmarkId String
+  tagId      String
+
+  bookmark Bookmark @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([bookmarkId, tagId])
+  @@index([bookmarkId, tagId], name: "idx_bookmark_tag_bookmark")
+}
+
+enum BookmarkType {
+  VIDEO
+  ARTICLE
+  PAGE
+  IMAGE
+  YOUTUBE
+  TWEET
+  PDF
+  PRODUCT
+}
+
+enum BookmarkStatus {
+  PENDING
+  PROCESSING
+  READY
+  ERROR
+}
+
+enum BookmarkProcessingRunStatus {
+  STARTED
+  COMPLETED
+  FAILED
+}
+
+model Bookmark {
+  id     String @id @default(ulid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  url  String
+  type BookmarkType?
+
+  title          String?
+  titleEmbedding Unsupported("vector(1536)")?
+
+  summary String?
+
+  note    String?
+  preview String?
+
+  vectorSummary          String?
+  vectorSummaryEmbedding Unsupported("vector(1536)")?
+
+  imageDescription String?
+
+  faviconUrl    String?
+  ogImageUrl    String?
+  ogDescription String?
+
+  metadata Json?
+
+  status       BookmarkStatus @default(PENDING)
+  inngestRunId String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  starred      Boolean        @default(false)
+  read         Boolean        @default(false)
+
+  tags BookmarkTag[]
+
+  opens BookmarkOpen[]
+
+  BookmarkChunk  BookmarkChunk[]
+  processingRuns BookmarkProcessingRun[]
+
+  @@index([userId, type, starred, read, status], name: "idx_bookmark_user_filters")
+  @@index([userId, createdAt(sort: Desc)], name: "idx_bookmark_user_created")
+  @@index([userId, starred, createdAt(sort: Desc)], name: "idx_bookmark_starred")
+  @@index([userId, read, createdAt(sort: Desc)], name: "idx_bookmark_unread")
+}
+
+model BookmarkProcessingRun {
+  id            String                      @id @default(cuid())
+  inngestRunId  String                      @unique
+  bookmarkId    String
+  userId        String
+  status        BookmarkProcessingRunStatus @default(STARTED)
+  startedAt     DateTime                    @default(now())
+  completedAt   DateTime?
+  failureReason String?
+
+  bookmark Bookmark @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@index([inngestRunId])
+}
+
+model BookmarkChunk {
+  id         String                       @id @default(nanoid(7))
+  bookmarkId String
+  idx        Int
+  content    String
+  embedding  Unsupported("vector(1536)")?
+
+  bookmark Bookmark @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+}
+
+model BookmarkOpen {
+  id         String   @id @default(nanoid(7))
+  bookmarkId String
+  userId     String
+  openedAt   DateTime @default(now())
+
+  bookmark Bookmark @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookmarkId, userId])
+  @@index([userId, openedAt])
+}
+
+model Subscription {
+  id                   String    @id
+  plan                 String
+  referenceId          String
+  user                 User      @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  status               String?
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  cancelAtPeriodEnd    Boolean?
+  seats                Int?
+
+  @@map("subscription")
+}

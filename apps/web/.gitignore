@@ -1,0 +1,6 @@
+.env
+.vercel
+test-results
+playwright-report
+playwright/.auth
+debug/
