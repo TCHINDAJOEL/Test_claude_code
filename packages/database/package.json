@@ -12,7 +12,7 @@
   "scripts": {
     "db:generate": "prisma generate",
     "db:migrate": "dotenv -e .env -- prisma migrate dev --skip-generate",
-    
+    "db:seed": "tsx scripts/seed.ts",
     "db:deploy": "prisma migrate deploy",
     "fix:bookmark-ids": "tsx scripts/fix-bookmark-ids.ts"
   },
