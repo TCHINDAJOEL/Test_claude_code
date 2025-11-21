@@ -23,7 +23,7 @@ import { LogoutButton } from "../auth/logout";
 export const HeaderUser = () => {
   const plan = useUserPlan();
   const session = authClient.useSession();
-  const isMobile = useMedia("(max-width: 768px)");
+  const isMobile = useMedia("(max-width: 768px)", false);
 
   const isImpersonating = session.data?.session.impersonatedBy !== null;
   const isAdmin = session.data?.user.role === "admin";

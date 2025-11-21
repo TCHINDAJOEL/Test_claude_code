@@ -28,7 +28,7 @@ import { z } from "zod";
 
 export const BookmarkHeader = () => {
   const plan = useUserPlan();
-  const isMobile = useMedia("(max-width: 768px)");
+  const isMobile = useMedia("(max-width: 768px)", false);
 
   const bookmarksInfo = useQuery({
     queryKey: ["bookmarks", "info"],
